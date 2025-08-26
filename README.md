@@ -108,7 +108,3 @@ Provides a simple interface for full-duplex UART communication.
 - Send and receive data via FPGA.
 
 ---
-
-## 📜 License
-This project is released under the **MIT License**.  
-You are free to use, modify, and distribute it.
