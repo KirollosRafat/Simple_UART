@@ -1,6 +1,9 @@
 // uart_tx.sv
 // Active-high ASYNC reset (posedge reset)
 // LSB-first, 1 start bit, 1 stop bit
+//
+
+
 module uart_tx #(
     parameter int DATAWIDTH = 8,
     parameter int SB_TICK   = 16
@@ -17,55 +20,59 @@ module uart_tx #(
     state_t state, state_n;
 
     logic [$clog2(SB_TICK)-1:0] s_reg, s_n;
-    logic [$clog2(DATAWIDTH)-1:0] n_reg, n_n;
+
+    logic [$clog2(DATAWIDTH):0] n_reg, n_n;   // kept only to count bits sent
+
     logic [DATAWIDTH-1:0] b_reg, b_n;
     logic tx_n;
     logic tx_done_n;
 
-    // state regs
+    // ---------- state registers ----------
     always_ff @(posedge clk or posedge reset) begin
         if (reset) begin
-            state       <= IDLE;
-            s_reg       <= '0;
-            n_reg       <= '0;
-            b_reg       <= '0;
-            tx          <= 1'b1; // idle high
-            tx_done_tick<= 1'b0;
+            state        <= IDLE;
+            s_reg        <= '0;
+            n_reg        <= '0;
+            b_reg        <= '0;
+            tx           <= 1'b1; // idle high
+            tx_done_tick <= 1'b0;
         end else begin
-            state       <= state_n;
-            s_reg       <= s_n;
-            n_reg       <= n_n;
-            b_reg       <= b_n;
-            tx          <= tx_n;
-            tx_done_tick<= tx_done_n;
+            state        <= state_n;
+            s_reg        <= s_n;
+            n_reg        <= n_n;
+            b_reg        <= b_n;
+            tx           <= tx_n;
+            tx_done_tick <= tx_done_n;
         end
     end
 
-    // next state logic
+    // ---------- next-state / output logic ----------
     always_comb begin
-        state_n     = state;
-        s_n         = s_reg;
-        n_n         = n_reg;
-        b_n         = b_reg;
-        tx_n        = tx;
-        tx_done_n   = 1'b0;
+        state_n   = state;
+        s_n       = s_reg;
+        n_n       = n_reg;
+        b_n       = b_reg;
+        tx_n      = tx;
+        tx_done_n = 1'b0;
 
-        unique case (state)
+        case (state)
+            // ---- IDLE ----
             IDLE: begin
                 tx_n = 1'b1;
                 if (tx_start) begin
                     b_n     = din;
                     s_n     = '0;
+                    n_n     = '0;
                     state_n = START;
                 end
             end
 
+            // ---- START ----
             START: begin
                 tx_n = 1'b0; // start bit low
                 if (s_tick) begin
                     if (s_reg == SB_TICK-1) begin
                         s_n     = '0;
-                        n_n     = '0;
                         state_n = DATA;
                     end else begin
                         s_n = s_reg + 1'b1;
@@ -73,14 +80,21 @@ module uart_tx #(
                 end
             end
 
+            // ---- DATA ----
             DATA: begin
-                tx_n = b_reg[n_reg];
+                //         each completed bit period so the index is implicit.
+                tx_n = b_reg[0];
                 if (s_tick) begin
                     if (s_reg == SB_TICK-1) begin
+                        // FIX 1: always reset s_n before (possibly) going to STOP
                         s_n = '0;
                         if (n_reg == DATAWIDTH-1) begin
+                            // last bit done → STOP
                             state_n = STOP;
+                            // s_n already '0 above ✓
                         end else begin
+                            // shift out next bit
+                            b_n = b_reg >> 1;
                             n_n = n_reg + 1'b1;
                         end
                     end else begin
@@ -89,6 +103,7 @@ module uart_tx #(
                 end
             end
 
+            // ---- STOP ----
             STOP: begin
                 tx_n = 1'b1; // stop bit high
                 if (s_tick) begin
@@ -101,6 +116,13 @@ module uart_tx #(
                     end
                 end
             end
+
+            
+            default: begin
+                state_n = IDLE;
+                tx_n    = 1'b1;
+            end
         endcase
     end
+
 endmodule
