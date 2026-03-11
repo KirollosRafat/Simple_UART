@@ -73,7 +73,6 @@ module uart_rx #(
             DATA: begin
                 if (s_tick) begin
                     if (s_reg == (SB_TICK-1)) begin
-                        // FIX 3: SB_TICK-1 instead of hardcoded 15
                         data_next = {rx, data_reg[DATAWIDTH-1:1]};
                         s_next    = '0;
                         if (n_reg == (DATAWIDTH-1)) begin
@@ -89,13 +88,12 @@ module uart_rx #(
 
             // ---- STOP ----
             // Wait a full bit period, assert rx_done_tick, return to IDLE.
-            // FIX 4: added s_next = '0 on transition so next frame starts clean.
             STOP: begin
                 if (s_tick) begin
                     if (s_reg == (SB_TICK-1)) begin
                         state_next   = IDLE;
                         rx_done_tick = 1'b1;
-                        s_next       = '0;   // FIX 4
+                        s_next       = '0;   
                     end else begin
                         s_next = s_reg + 1'b1;
                     end
@@ -113,4 +111,5 @@ module uart_rx #(
     assign dout = data_reg;
 
 endmodule
+
 
